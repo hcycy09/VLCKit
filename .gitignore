@@ -1,0 +1,31 @@
+# VLCKit Build Artifacts
+VLCKit-Source/
+build/
+
+# XCFramework outputs
+*.xcframework
+*.zip
+
+# Checksums
+*.sha256
+checksums.txt
+
+# macOS
+.DS_Store
+
+# Xcode
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+DerivedData/
+
+# Build intermediates
+*.o
+*.a
+*.dylib
+*.framework
+
+# Temporary files
+*.tmp
+*.temp
+.*.swp
