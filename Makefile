@@ -18,18 +18,9 @@ CHECKSUM_FILE = $(BUILD_DIR)/VLCKit-$(VERSION).sha256
 # Build script path (relative to VLCKit source directory)
 COMPILE_SCRIPT = compileAndBuildVLCKit.sh
 
-# Framework paths after building
-IOS_FRAMEWORK = $(VLCKIT_DIR)/build/MobileVLCKit.framework
-IOS_SIM_FRAMEWORK = $(VLCKIT_DIR)/build/MobileVLCKit-Simulator.framework
-MACOS_FRAMEWORK = $(VLCKIT_DIR)/build/VLCKit.framework
-TVOS_FRAMEWORK = $(VLCKIT_DIR)/build/TVVLCKit.framework
-TVOS_SIM_FRAMEWORK = $(VLCKIT_DIR)/build/TVVLCKit-Simulator.framework
-VISIONOS_FRAMEWORK = $(VLCKIT_DIR)/build/XRVLCKit.framework
-VISIONOS_SIM_FRAMEWORK = $(VLCKIT_DIR)/build/XRVLCKit-Simulator.framework
+.PHONY: all clean clone build-ios build-macos build-tvos build-visionos build-all merge-xcframeworks package
 
-.PHONY: all clean clone build-ios build-ios-simulator build-macos build-tvos build-tvos-simulator build-visionos build-visionos-simulator xcframework
-
-all: xcframework
+all: clone merge-xcframeworks
 
 # Clone VLCKit repository
 clone:
@@ -42,75 +33,74 @@ clone:
 	@echo "✅ Clone complete"
 
 # Build iOS (device)
-build-ios: clone
+build-ios: 
 	@echo "🔨 Building VLCKit for iOS (device)..."
-	cd $(VLCKIT_DIR) && ./$(COMPILE_SCRIPT) -a arm64 -t iphoneos -r
+	cd $(VLCKIT_DIR) && ./$(COMPILE_SCRIPT) -f -r -a all
+	cd ..
 	@echo "✅ iOS build complete"
 
-# Build iOS Simulator
-build-ios-simulator: clone
-	@echo "🔨 Building VLCKit for iOS Simulator..."
-	cd $(VLCKIT_DIR) && ./$(COMPILE_SCRIPT) -a "x86_64 arm64" -t iphonesimulator -r
-	@echo "✅ iOS Simulator build complete"
-
 # Build macOS
-build-macos: clone
+build-macos: 
 	@echo "🔨 Building VLCKit for macOS..."
-	cd $(VLCKIT_DIR) && ./$(COMPILE_SCRIPT) -a "x86_64 arm64" -t macosx -r
+	cd $(VLCKIT_DIR) && ./$(COMPILE_SCRIPT) -x -r -a all
+	cd ..
 	@echo "✅ macOS build complete"
 
 # Build tvOS (device)
-build-tvos: clone
+build-tvos: 
 	@echo "🔨 Building VLCKit for tvOS (device)..."
-	cd $(VLCKIT_DIR) && ./$(COMPILE_SCRIPT) -a arm64 -t appletvos -r
+	cd $(VLCKIT_DIR) && ./$(COMPILE_SCRIPT) -f -r -t -a all
+	cd ..
 	@echo "✅ tvOS build complete"
 
-# Build tvOS Simulator
-build-tvos-simulator: clone
-	@echo "🔨 Building VLCKit for tvOS Simulator..."
-	cd $(VLCKIT_DIR) && ./$(COMPILE_SCRIPT) -a "x86_64 arm64" -t appletvsimulator -r
-	@echo "✅ tvOS Simulator build complete"
-
 # Build visionOS (device)
-build-visionos: clone
+build-visionos: 
 	@echo "🔨 Building VLCKit for visionOS (device)..."
-	cd $(VLCKIT_DIR) && ./$(COMPILE_SCRIPT) -a arm64 -t xros -r
+	cd $(VLCKIT_DIR) && ./$(COMPILE_SCRIPT) -f -r -i -a all
+	cd ..
 	@echo "✅ visionOS build complete"
 
-# Build visionOS Simulator
-build-visionos-simulator: clone
-	@echo "🔨 Building VLCKit for visionOS Simulator..."
-	cd $(VLCKIT_DIR) && ./$(COMPILE_SCRIPT) -a "x86_64 arm64" -t xrsimulator -r
-	@echo "✅ visionOS Simulator build complete"
-
 # Build all platforms
-build-all: build-ios build-ios-simulator build-macos build-tvos build-tvos-simulator build-visionos build-visionos-simulator
+build-all: build-ios build-macos build-tvos build-visionos
 	@echo "✅ All platforms built successfully"
 
-# Create xcframework
-xcframework: build-all
-	@echo "📦 Creating universal xcframework (version $(VERSION))..."
+
+# Merge platform-specific xcframeworks into one unified xcframework
+merge-xcframeworks: 
+	@echo "🔄 Merging platform-specific xcframeworks..."
 	@mkdir -p $(BUILD_DIR)
 	@rm -rf $(XCFRAMEWORK_PATH)
-	xcodebuild -create-xcframework \
-		-framework $(IOS_FRAMEWORK) \
-		-framework $(IOS_SIM_FRAMEWORK) \
-		-framework $(MACOS_FRAMEWORK) \
-		-framework $(TVOS_FRAMEWORK) \
-		-framework $(TVOS_SIM_FRAMEWORK) \
-		-framework $(VISIONOS_FRAMEWORK) \
-		-framework $(VISIONOS_SIM_FRAMEWORK) \
-		-output $(XCFRAMEWORK_PATH)
-	@echo "✅ XCFramework created at $(XCFRAMEWORK_PATH)"
+	@# Collect all framework paths from each platform's xcframework
+	@FRAMEWORK_ARGS=""; \
+	for platform in iOS macOS tvOS xrOS; do \
+		PLATFORM_XCFW="$(VLCKIT_DIR)/build/$$platform/VLCKit.xcframework"; \
+		if [ -d "$$PLATFORM_XCFW" ]; then \
+			echo "  Found $$platform xcframework"; \
+			for variant in $$PLATFORM_XCFW/*-*; do \
+				if [ -d "$$variant" ] && [ -d "$$variant/VLCKit.framework" ]; then \
+					FRAMEWORK_ARGS="$$FRAMEWORK_ARGS -framework $$variant/VLCKit.framework"; \
+				fi; \
+			done; \
+		fi; \
+	done; \
+	if [ -z "$$FRAMEWORK_ARGS" ]; then \
+		echo "❌ Error: No platform xcframeworks found in $(VLCKIT_DIR)/build/"; \
+		echo "   Expected folders: iOS, macOS, tvOS, xrOS"; \
+		exit 1; \
+	fi; \
+	echo "🔨 Creating unified xcframework..."; \
+	xcodebuild -create-xcframework $$FRAMEWORK_ARGS -output $(XCFRAMEWORK_PATH)
+	@echo "✅ Unified XCFramework created at $(XCFRAMEWORK_PATH)"
 	@echo "📊 Framework size:"
 	@du -sh $(XCFRAMEWORK_PATH)
 	@echo ""
 	@echo "Version: $(VERSION)"
-
-# Create a distributable zip with version
-package: xcframework
+	@echo ""
+	@echo "📋 Included platforms:"
+	@plutil -p $(XCFRAMEWORK_PATH)/Info.plist | grep -A2 "SupportedPlatform" | grep '"' | sort -u
+	@echo ""
 	@echo "📦 Creating distributable package (version $(VERSION))..."
-	cd $(BUILD_DIR) && zip -r $(PACKAGE_NAME) $(XCFRAMEWORK_NAME)
+	@cd $(BUILD_DIR) && zip -r $(PACKAGE_NAME) $(XCFRAMEWORK_NAME)
 	@echo "✅ Package created at $(BUILD_DIR)/$(PACKAGE_NAME)"
 	@echo ""
 	@echo "📊 Package size:"
@@ -129,6 +119,9 @@ package: xcframework
 	@echo "Checksum:  $(CHECKSUM_FILE)"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+# Create a distributable zip with version (alias for merge-xcframeworks)
+package: merge-xcframeworks
+
 # Clean build artifacts
 clean:
 	@echo "🧹 Cleaning build artifacts..."
@@ -143,23 +136,21 @@ help:
 	@echo "Available targets:"
 	@echo "  all                  - Build xcframework for all platforms (default)"
 	@echo "  clone                - Clone VLCKit repository"
-	@echo "  build-ios            - Build for iOS devices"
-	@echo "  build-ios-simulator  - Build for iOS Simulator"
+	@echo "  build-ios            - Build for iOS (device + simulator)"
 	@echo "  build-macos          - Build for macOS"
-	@echo "  build-tvos           - Build for tvOS devices"
-	@echo "  build-tvos-simulator - Build for tvOS Simulator"
-	@echo "  build-visionos       - Build for visionOS devices"
-	@echo "  build-visionos-simulator - Build for visionOS Simulator"
+	@echo "  build-tvos           - Build for tvOS (device + simulator)"
+	@echo "  build-visionos       - Build for visionOS (device + simulator)"
 	@echo "  build-all            - Build all platforms"
-	@echo "  xcframework          - Create universal xcframework"
-	@echo "  package              - Create distributable zip with checksum"
+	@echo "  merge-xcframeworks   - Merge platform xcframeworks into one with zip and checksum"
+	@echo "  package              - Same as merge-xcframeworks"
 	@echo "  clean                - Remove all build artifacts"
 	@echo "  help                 - Show this help message"
 	@echo ""
 	@echo "Example usage:"
-	@echo "  make                      - Build everything and create xcframework"
-	@echo "  make package              - Build and create distributable package"
-	@echo "  make package VERSION=3.6.0 - Build with specific version number"
-	@echo "  make clean                - Clean all build artifacts"
+	@echo "  make                           - Build all platforms and create package (default)"
+	@echo "  make merge-xcframeworks        - Merge iOS/macOS/tvOS/xrOS xcframeworks into one"
+	@echo "  make package                   - Same as merge-xcframeworks"
+	@echo "  make VERSION=3.6.0             - Build with specific version number"
+	@echo "  make clean                     - Clean all build artifacts"
 	@echo ""
 	@echo "Current version: $(VERSION)"
