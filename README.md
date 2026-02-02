@@ -35,7 +35,7 @@ This project provides a Makefile-based build system that:
 ### Build Everything (Default)
 
 ```bash
-make
+make build-all
 ```
 
 This will:
@@ -46,23 +46,14 @@ This will:
 ### Build with Packaging
 
 ```bash
-make package
+make package VERSION=3.7.0
 ```
 
 This creates:
 - Universal XCFramework
-- Versioned zip file (`VLCKit-1.0.0.xcframework.zip`)
-- SHA256 checksum file (`VLCKit-1.0.0.sha256`)
+- Versioned zip file (`VLCKit-3.7.0.xcframework.zip`)
+- SHA256 checksum file (`VLCKit-3.7.0.sha256`)
 
-### Build with Custom Version
-
-```bash
-make package VERSION=3.6.0
-```
-
-Outputs:
-- `build/VLCKit-3.6.0.xcframework.zip`
-- `build/VLCKit-3.6.0.sha256`
 
 ## Available Commands
 
